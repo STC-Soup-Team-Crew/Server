@@ -31,3 +31,9 @@ class User(UserBase):
 
 class Message(BaseModel):
     message: str
+
+
+class ImageAnalysisResponse(BaseModel):
+    """Generic wrapper for the external image-processing API response."""
+    result: Optional[dict] = None
+    error: Optional[str] = None
