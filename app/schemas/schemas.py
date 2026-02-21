@@ -8,3 +8,6 @@ class ItemBase(BaseModel):
     Ingredients: List[str]
     Time: int
     created_at: Optional[str] = None
+
+class FavoriteRecipe(ItemBase):
+    user_id: str

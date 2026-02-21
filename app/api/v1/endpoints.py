@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 
 from app.core.config import settings
 import app.db.session as supabase_db
-from app.schemas.schemas import ItemBase
+from app.schemas.schemas import ItemBase, FavoriteRecipe
 
 router = APIRouter()
 
@@ -43,6 +43,11 @@ async def create_item(item: dict):
 @router.post("/recipes/save")
 async def save_recipe(recipe: ItemBase):
     supabase_db.save_item_to_db(recipe)
+
+
+@router.post("/recipes/favorite")
+async def favorite_recipe(favorite: FavoriteRecipe):
+    return supabase_db.save_favorite_to_db(favorite)
 
 # ---------- Image upload → ChatGPT vision ----------
 
@@ -121,15 +126,17 @@ async def upload_image(file: UploadFile = File(...)):
     except json.JSONDecodeError:
         pass  # Continue to fallback
 
-    # Fallback Find the first '[' and last ']' since the target schema is a JSON array
-    start_idx = content.find('[')
-    end_idx = content.rfind(']')
- 
-    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        try:
-            recipe_data = json.loads(content[start_idx:end_idx+1])
-            return recipe_data
-        except json.JSONDecodeError:
-            pass
-            
+    # Fallback: Try to find the first '[' or '{' and the last ']' or '}' 
+    # and parse the content between them.
+    for start_char, end_char in [("[", "]"), ("{", "}")]:
+        start_idx = content.find(start_char)
+        end_idx = content.rfind(end_char)
+
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            try:
+                recipe_data = json.loads(content[start_idx : end_idx + 1])
+                return recipe_data
+            except json.JSONDecodeError:
+                continue
+
     raise HTTPException(status_code=502, detail=f"ChatGPT returned invalid JSON: {raw}")

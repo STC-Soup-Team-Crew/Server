@@ -3,7 +3,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from schemas.schemas import ItemBase
+from schemas.schemas import ItemBase, FavoriteRecipe
 
 load_dotenv()
 
@@ -22,6 +22,18 @@ def save_item_to_db(item: ItemBase):
 
     except Exception as e:
         print(f"Error saving to Supabase: {e}")
+
+
+def save_favorite_to_db(favorite: FavoriteRecipe):
+    try:
+        data_to_insert = favorite.model_dump(exclude_none=True)
+        # We assume a 'favorites' table exists or will be created
+        response = supabase.table('favorites').insert(data_to_insert).execute()
+        print("Successfully saved favorite:", response.data)
+        return response.data
+
+    except Exception as e:
+        print(f"Error saving favorite to Supabase: {e}")
 
 
 if __name__ == "__main__":
