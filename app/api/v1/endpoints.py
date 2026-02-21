@@ -40,6 +40,10 @@ async def create_item(item: dict):
     return {"item_id": 3, "name": item["name"]}
 
 
+@router.post("/recipes/save")
+async def save_recipe(recipe: ItemBase):
+    supabase_db.save_item_to_db(recipe)
+
 # ---------- Image upload → ChatGPT vision ----------
 
 @router.post("/upload-image/")
@@ -113,15 +117,6 @@ async def upload_image(file: UploadFile = File(...)):
     # Try parsing directly
     try:
         recipe_data = json.loads(content)
-
-        print("Parsed JSON from fallback:", recipe_data)
-        new_recipe = ItemBase(
-            Name=recipe_data[0]["Name"],
-            Steps=json.loads(recipe_data[0]["Steps"]),
-            Time=recipe_data[0]["Time"],
-            Ingredients=json.loads(recipe_data[0]["Ingredients"]),
-        )
-        supabase_db.save_item_to_db(new_recipe)
         return recipe_data
     except json.JSONDecodeError:
         pass  # Continue to fallback
@@ -133,15 +128,6 @@ async def upload_image(file: UploadFile = File(...)):
     if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
         try:
             recipe_data = json.loads(content[start_idx:end_idx+1])
-            print("Parsed JSON from fallback:", recipe_data)
-
-            new_recipe = ItemBase(
-                Name=recipe_data[0]["Name"],
-                Steps=json.loads(recipe_data[0]["Steps"]),
-                Time=recipe_data[0]["Time"],
-                Ingredients=json.loads(recipe_data[0]["Ingredients"]),
-            )
-            supabase_db.save_item_to_db(new_recipe)
             return recipe_data
         except json.JSONDecodeError:
             pass
