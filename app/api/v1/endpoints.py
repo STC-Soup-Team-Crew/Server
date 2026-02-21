@@ -6,15 +6,20 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from openai import AsyncOpenAI
 
 from app.core.config import settings
+import app.db.session as supabase_db
+from app.schemas.schemas import ItemBase
 
 router = APIRouter()
 
+# Updated prompt to enforce the exact JSON schema and stringified arrays
 PROMPT = (
     "Please break down the ingredients in this image (e.g. 3 tomatoes, 2 cucumbers, "
-    "10 avacados, etc...) and generate a recipe that can be made with THESE ingredients. "
+    "10 avocados, etc...) and generate a recipe that can be made with THESE ingredients. "
     "It doesn't need to use every ingredient, but it should not use additional ingredients. "
-    "please return ONLY the recipe as a .json file with the name as a string, ingredients "
-    "as an array of strings, integer time in minutes, and steps as an array of string"
+    "Please return ONLY the recipe as a JSON array containing a single object with the exact following schema: "
+    '[{"Name": "string", "Steps": "stringified array of strings", "Time": integer, "Ingredients": "stringified array of strings"}]. '
+    "Example exactly like this: "
+    '[{"Name":"15-Minute Pancakes","Steps":"[\\"Whisk dry ingredients\\",\\"Add milk and eggs\\",\\"Cook on buttered skillet\\"]","Time":15,"Ingredients":"[\\"Flour\\",\\"Eggs\\",\\"Milk\\",\\"Butter\\"]"}]'
 )
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -95,25 +100,48 @@ async def upload_image(file: UploadFile = File(...)):
 
     # Robust JSON extraction
     content = raw.strip()
-    
+
     # Try to find JSON block in markdown
     if "```" in content:
         # Extract the content between the first and last triple backticks
         match = re.search(r"```(?:json)?\n?(.*?)\n?```", content, re.DOTALL)
         if match:
             content = match.group(1).strip()
-    
-    # If it still doesn't parse, try to find the first '{' and last '}'
+
+    # Try parsing directly
     try:
-        return json.loads(content)
+        recipe_data = json.loads(content)
+
+        print("Parsed JSON from fallback:", recipe_data)
+        new_recipe = ItemBase(
+            Name=recipe_data[0]["Name"],
+            Steps=json.loads(recipe_data[0]["Steps"]),
+            Time=recipe_data[0]["Time"],
+            Ingredients=json.loads(recipe_data[0]["Ingredients"]),
+        )
+        supabase_db.save_item_to_db(new_recipe)
+        return recipe_data
     except json.JSONDecodeError:
-        # Fallback: Find the first { and last }
-        start = content.find('{')
-        end = content.rfind('}')
-        if start != -1 and end != -1 and end > start:
-            try:
-                return json.loads(content[start:end+1])
-            except json.JSONDecodeError:
-                pass
-        
-        raise HTTPException(status_code=502, detail=f"ChatGPT returned invalid JSON: {raw}")
+        pass  # Continue to fallback
+
+    # Fallback Find the first '[' and last ']' since the target schema is a JSON array
+    start_idx = content.find('[')
+    end_idx = content.rfind(']')
+ 
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        try:
+            recipe_data = json.loads(content[start_idx:end_idx+1])
+            print("Parsed JSON from fallback:", recipe_data)
+
+            new_recipe = ItemBase(
+                Name=recipe_data[0]["Name"],
+                Steps=json.loads(recipe_data[0]["Steps"]),
+                Time=recipe_data[0]["Time"],
+                Ingredients=json.loads(recipe_data[0]["Ingredients"]),
+            )
+            supabase_db.save_item_to_db(new_recipe)
+            return recipe_data
+        except json.JSONDecodeError:
+            pass
+            
+    raise HTTPException(status_code=502, detail=f"ChatGPT returned invalid JSON: {raw}")
