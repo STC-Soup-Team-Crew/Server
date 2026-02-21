@@ -5,6 +5,8 @@ import re
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from openai import AsyncOpenAI
 
+from typing import List
+
 from app.core.config import settings
 import app.db.session as supabase_db
 from app.schemas.schemas import ItemBase, FavoriteRecipe
@@ -53,6 +55,13 @@ async def favorite_recipe(favorite: FavoriteRecipe):
 @router.get("/recipes/favorite")
 async def get_favorites(user_id: str):
     return supabase_db.get_favorites_from_db(user_id)
+
+
+@router.get("/recipes/search")
+async def search_recipes(ingredients: str):
+    """Search recipes by ingredients. Pass a comma-separated list, e.g. ?ingredients=tomato,cheese"""
+    ingredient_list = [i.strip() for i in ingredients.split(",") if i.strip()]
+    return supabase_db.search_recipes_by_ingredients(ingredient_list)
 
 # ---------- Image upload → ChatGPT vision ----------
 

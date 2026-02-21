@@ -46,6 +46,36 @@ def get_favorites_from_db(user_id: str):
         return []
 
 
+def search_recipes_by_ingredients(ingredients: list):
+    """Return recipes whose Ingredients list contains at least one of the queried ingredients (case-insensitive)."""
+    try:
+        response = supabase.table('recipes').select("*").execute()
+        all_recipes = response.data or []
+
+        query_lower = [q.strip().lower() for q in ingredients if q.strip()]
+        if not query_lower:
+            return []
+
+        results = []
+        for recipe in all_recipes:
+            recipe_ingredients = recipe.get("Ingredients", [])
+            # Ingredients may be stored as a JSON string or a list
+            if isinstance(recipe_ingredients, str):
+                import json as _json
+                try:
+                    recipe_ingredients = _json.loads(recipe_ingredients)
+                except Exception:
+                    recipe_ingredients = []
+            ingr_lower = [i.lower() for i in recipe_ingredients]
+            if any(any(q in ingr for ingr in ingr_lower) for q in query_lower):
+                results.append(recipe)
+
+        return results
+    except Exception as e:
+        print(f"Error searching recipes: {e}")
+        return []
+
+
 if __name__ == "__main__":
     new_recipe = ItemBase(
         Name="15-Minute Pancakes",
