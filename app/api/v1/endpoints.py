@@ -49,6 +49,10 @@ async def save_recipe(recipe: ItemBase):
 async def favorite_recipe(favorite: FavoriteRecipe):
     return supabase_db.save_favorite_to_db(favorite)
 
+@router.get("/recipes/favorite")
+async def get_favorites(user_id: str):
+    return supabase_db.get_favorites_from_db(user_id)
+
 # ---------- Image upload → ChatGPT vision ----------
 
 @router.post("/upload-image/")

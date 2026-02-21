@@ -36,6 +36,16 @@ def save_favorite_to_db(favorite: FavoriteRecipe):
         print(f"Error saving favorite to Supabase: {e}")
 
 
+def get_favorites_from_db(user_id: str):
+    try:
+        response = supabase.table('favorites').select("*").eq("user_id", user_id).execute()
+        print("Successfully fetched favorites:", response.data)
+        return response.data
+    except Exception as e:
+        print(f"Error fetching favorites: {e}")
+        return []
+
+
 if __name__ == "__main__":
     new_recipe = ItemBase(
         Name="15-Minute Pancakes",
