@@ -16,6 +16,8 @@ PROMPT = (
     "Please break down the ingredients in this image (e.g. 3 tomatoes, 2 cucumbers, "
     "10 avocados, etc...) and generate a recipe that can be made with THESE ingredients. "
     "It doesn't need to use every ingredient, but it should not use additional ingredients. "
+    "IMPORTANT: If the image is unclear or you cannot identify specific items, make your absolute best guess based on the context of the image. "
+    "DO NOT apologize, DO NOT ask for clarification, and DO NOT output any conversational text. "
     "Please return ONLY the recipe as a JSON array containing a single object with the exact following schema: "
     '[{"Name": "string", "Steps": "stringified array of strings", "Time": integer, "Ingredients": "stringified array of strings"}]. '
     "Example exactly like this: "
