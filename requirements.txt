@@ -2,7 +2,9 @@ FastAPI
 uvicorn
 sqlalchemy
 pydantic
+pydantic-settings
 python-dotenv
 python-multipart
 pytest
 httpx
+openai
