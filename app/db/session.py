@@ -47,7 +47,7 @@ def get_favorites_from_db(user_id: str):
 
 
 def search_recipes_by_ingredients(ingredients: list):
-    """Return recipes whose Ingredients list contains at least one of the queried ingredients (case-insensitive)."""
+    """Return recipes whose Ingredients list or Name matches at least one of the queried terms (case-insensitive)."""
     try:
         response = supabase.table('recipes').select("*").execute()
         all_recipes = response.data or []
@@ -58,6 +58,8 @@ def search_recipes_by_ingredients(ingredients: list):
 
         results = []
         for recipe in all_recipes:
+            recipe_name = (recipe.get("Name") or recipe.get("name") or "").lower()
+
             recipe_ingredients = recipe.get("Ingredients", [])
             # Ingredients may be stored as a JSON string or a list
             if isinstance(recipe_ingredients, str):
@@ -67,7 +69,11 @@ def search_recipes_by_ingredients(ingredients: list):
                 except Exception:
                     recipe_ingredients = []
             ingr_lower = [i.lower() for i in recipe_ingredients]
-            if any(any(q in ingr for ingr in ingr_lower) for q in query_lower):
+
+            name_match = any(q in recipe_name for q in query_lower)
+            ingredient_match = any(any(q in ingr for ingr in ingr_lower) for q in query_lower)
+
+            if name_match or ingredient_match:
                 results.append(recipe)
 
         return results
