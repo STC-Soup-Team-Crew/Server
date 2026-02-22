@@ -3,7 +3,7 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from schemas.schemas import ItemBase, FavoriteRecipe
+from schemas.schemas import ItemBase, FavoriteRecipe, FridgeListingCreate
 
 load_dotenv()
 
@@ -79,6 +79,110 @@ def search_recipes_by_ingredients(ingredients: list):
         return results
     except Exception as e:
         print(f"Error searching recipes: {e}")
+        return []
+
+
+# ---------- Fridge-share helpers ----------
+
+FRIDGE_TABLE = "fridge_listings"
+
+
+def create_fridge_listing(listing: FridgeListingCreate) -> dict:
+    """Insert a new fridge listing and return the created row."""
+    try:
+        data = listing.model_dump(exclude_none=True)
+        data["status"] = "available"
+        response = supabase.table(FRIDGE_TABLE).insert(data).execute()
+        return response.data[0] if response.data else {}
+    except Exception as e:
+        print(f"Error creating fridge listing: {e}")
+        raise
+
+
+def get_fridge_listings(status: str = "available") -> list:
+    """Return all listings with the given status, newest first."""
+    try:
+        response = (
+            supabase.table(FRIDGE_TABLE)
+            .select("*")
+            .eq("status", status)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return response.data or []
+    except Exception as e:
+        print(f"Error fetching fridge listings: {e}")
+        return []
+
+
+def get_fridge_listing_by_id(listing_id: str) -> dict | None:
+    """Return a single listing by its id."""
+    try:
+        response = (
+            supabase.table(FRIDGE_TABLE)
+            .select("*")
+            .eq("id", listing_id)
+            .single()
+            .execute()
+        )
+        return response.data
+    except Exception as e:
+        print(f"Error fetching fridge listing {listing_id}: {e}")
+        return None
+
+
+def claim_fridge_listing(listing_id: str, claimed_by: str, claimed_by_name: str) -> dict | None:
+    """Mark a listing as claimed. Returns updated row or None."""
+    try:
+        response = (
+            supabase.table(FRIDGE_TABLE)
+            .update({
+                "status": "claimed",
+                "claimed_by": claimed_by,
+                "claimed_by_name": claimed_by_name,
+            })
+            .eq("id", listing_id)
+            .eq("status", "available")  # only claim if still available
+            .execute()
+        )
+        if response.data:
+            return response.data[0]
+        return None
+    except Exception as e:
+        print(f"Error claiming fridge listing {listing_id}: {e}")
+        raise
+
+
+def delete_fridge_listing(listing_id: str, user_id: str) -> bool:
+    """Soft-delete a listing (set status='deleted') — only by the owner."""
+    try:
+        response = (
+            supabase.table(FRIDGE_TABLE)
+            .update({"status": "deleted"})
+            .eq("id", listing_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        return bool(response.data)
+    except Exception as e:
+        print(f"Error deleting fridge listing {listing_id}: {e}")
+        raise
+
+
+def get_user_fridge_listings(user_id: str) -> list:
+    """Return all listings posted by a specific user (any status except deleted)."""
+    try:
+        response = (
+            supabase.table(FRIDGE_TABLE)
+            .select("*")
+            .eq("user_id", user_id)
+            .neq("status", "deleted")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return response.data or []
+    except Exception as e:
+        print(f"Error fetching user fridge listings: {e}")
         return []
 
 
