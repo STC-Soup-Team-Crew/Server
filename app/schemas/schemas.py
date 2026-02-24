@@ -43,3 +43,15 @@ class ClaimRequest(BaseModel):
     """Payload for claiming a fridge listing."""
     claimed_by: str              # user_id of claimer
     claimed_by_name: str         # display name of claimer
+
+
+# ---------- Billing ----------
+
+class MobilePaymentSheetRequest(BaseModel):
+    featureKey: Optional[str] = None
+    planKey: Optional[str] = None
+    source: Optional[str] = None
+
+
+class CustomerPortalRequest(BaseModel):
+    returnUrl: Optional[str] = None
