@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.endpoints import router as api_router
+from app.api.v1.billing_endpoints import router as billing_router
 from app.api.v1.impact_endpoints import router as impact_router
 
 app = FastAPI(
@@ -21,6 +22,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(billing_router, prefix="/api/v1")
 app.include_router(impact_router, prefix="/api/v1")
 
 @app.get("/")

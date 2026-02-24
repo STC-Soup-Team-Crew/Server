@@ -147,3 +147,24 @@ The test suite covers:
 - OpenAI network/API errors
 - Invalid JSON returned by OpenAI
 - All four accepted MIME types (parametrized)
+
+---
+
+## Billing endpoints (Stripe + Clerk)
+
+- `POST /api/v1/billing/mobile-payment-sheet` (Clerk Bearer token required)
+- `POST /api/v1/billing/customer-portal` (Clerk Bearer token required)
+- `POST /api/v1/billing/webhook` (Stripe webhook signature required)
+
+### Billing environment variables
+
+```env
+STRIPE_SECRET_KEY=sk_live_or_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+CLERK_SECRET_KEY=sk_live_or_test_...
+# Optional:
+CLERK_JWT_ISSUER=https://your-clerk-domain
+CLERK_JWT_AUDIENCE=your-audience
+BILLING_RETURN_URL=mealmaker://billing-return
+BILLING_MERCHANT_DISPLAY_NAME=MealMaker
+```
