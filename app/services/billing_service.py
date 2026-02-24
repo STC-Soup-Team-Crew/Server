@@ -179,6 +179,97 @@ def get_or_create_customer(clerk_user_id: str) -> str:
     return customer_id
 
 
+def _find_customer_id_for_user(clerk_user_id: str) -> Optional[str]:
+    customer_id = store.get_customer_id(clerk_user_id)
+    if customer_id:
+        return customer_id
+
+    try:
+        search_result = stripe.Customer.search(
+            query=f"metadata['clerk_user_id']:'{clerk_user_id}'",
+            limit=1,
+        )
+        search_data = _obj_get(search_result, "data", []) or []
+        if search_data:
+            found_customer_id = _obj_get(search_data[0], "id")
+            if found_customer_id:
+                store.set_customer_id(clerk_user_id, found_customer_id)
+                return found_customer_id
+    except Exception:
+        logger.warning("Stripe customer search unavailable for billing status lookup.", exc_info=True)
+
+    try:
+        customers = stripe.Customer.list(limit=100)
+        for customer in _obj_get(customers, "data", []) or []:
+            metadata = _obj_get(customer, "metadata", {}) or {}
+            if metadata.get("clerk_user_id") != clerk_user_id:
+                continue
+            if _obj_get(customer, "deleted", False):
+                continue
+            found_customer_id = _obj_get(customer, "id")
+            if found_customer_id:
+                store.set_customer_id(clerk_user_id, found_customer_id)
+                return found_customer_id
+    except Exception as exc:
+        raise _error(
+            502,
+            "BILLING_CUSTOMER_LOOKUP_FAILED",
+            f"Unable to look up Stripe customer for subscription status: {exc}",
+        ) from exc
+
+    return None
+
+
+def get_subscription_status(clerk_user_id: str) -> Dict[str, Any]:
+    _require_stripe()
+    customer_id = _find_customer_id_for_user(clerk_user_id)
+    if not customer_id:
+        return {
+            "hasActiveSubscription": False,
+            "status": "inactive",
+            "planName": "No active plan",
+            "currentPeriodEnd": None,
+        }
+
+    try:
+        subscriptions = stripe.Subscription.list(
+            customer=customer_id,
+            status="all",
+            limit=100,
+            expand=["data.items.data.price.product"],
+        )
+    except Exception as exc:
+        raise _error(
+            502,
+            "BILLING_SUBSCRIPTION_STATUS_LOOKUP_FAILED",
+            f"Unable to fetch Stripe subscriptions: {exc}",
+        ) from exc
+
+    subscription_list = _obj_get(subscriptions, "data", []) or []
+    active_sub = next(
+        (sub for sub in subscription_list if _obj_get(sub, "status") in {"active", "trialing"}),
+        None,
+    )
+    selected_sub = active_sub or (subscription_list[0] if subscription_list else None)
+
+    if not selected_sub:
+        return {
+            "hasActiveSubscription": False,
+            "status": "inactive",
+            "planName": "No active plan",
+            "currentPeriodEnd": None,
+        }
+
+    status = _obj_get(selected_sub, "status", "inactive")
+    plan_name = _extract_plan_name(selected_sub) or settings.billing_subscription_name or "No active plan"
+    return {
+        "hasActiveSubscription": active_sub is not None,
+        "status": status,
+        "planName": plan_name,
+        "currentPeriodEnd": _to_iso_utc(_obj_get(selected_sub, "current_period_end")),
+    }
+
+
 def _parse_plan_key_price_map() -> Dict[str, str]:
     raw_map = settings.billing_plan_key_price_map.strip()
     if not raw_map:

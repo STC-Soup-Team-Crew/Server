@@ -8,6 +8,7 @@ from app.schemas.billing_schemas import (
     CustomerPortalResponse,
     MobilePaymentSheetRequest,
     MobilePaymentSheetResponse,
+    SubscriptionStatusResponse,
 )
 from app.services import billing_service
 
@@ -46,6 +47,22 @@ async def create_customer_portal(
         raise HTTPException(
             status_code=500,
             detail={"code": "BILLING_PORTAL_FAILED", "message": f"Failed to create customer portal: {exc}"},
+        ) from exc
+
+
+@router.get("/subscription-status", response_model=SubscriptionStatusResponse)
+async def get_subscription_status(
+    auth: ClerkAuthContext = Depends(get_current_clerk_user),
+):
+    try:
+        return billing_service.get_subscription_status(auth.user_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to fetch subscription status", extra={"user_id": auth.user_id})
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "BILLING_STATUS_FAILED", "message": f"Failed to fetch subscription status: {exc}"},
         ) from exc
 
 

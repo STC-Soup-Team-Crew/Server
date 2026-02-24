@@ -154,6 +154,7 @@ The test suite covers:
 
 - `POST /api/v1/billing/mobile-payment-sheet` (Clerk Bearer token required)
 - `POST /api/v1/billing/customer-portal` (Clerk Bearer token required)
+- `GET /api/v1/billing/subscription-status` (Clerk Bearer token required)
 - `POST /api/v1/billing/webhook` (Stripe webhook signature required)
 
 ### Billing environment variables

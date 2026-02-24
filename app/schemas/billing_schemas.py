@@ -23,3 +23,10 @@ class CustomerPortalRequest(BaseModel):
 
 class CustomerPortalResponse(BaseModel):
     url: str
+
+
+class SubscriptionStatusResponse(BaseModel):
+    hasActiveSubscription: bool
+    status: str
+    planName: str
+    currentPeriodEnd: Optional[str] = None

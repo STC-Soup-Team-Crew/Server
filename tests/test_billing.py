@@ -57,6 +57,20 @@ def test_customer_portal_success(mock_portal):
     assert response.json()["url"].startswith("https://billing.stripe.com/")
 
 
+@patch("app.api.v1.billing_endpoints.billing_service.get_subscription_status")
+def test_subscription_status_success(mock_status):
+    mock_status.return_value = {
+        "hasActiveSubscription": True,
+        "status": "active",
+        "planName": "Meal Master Pro",
+        "currentPeriodEnd": "2026-12-01T00:00:00+00:00",
+    }
+    response = client.get("/api/v1/billing/subscription-status")
+    assert response.status_code == 200
+    assert response.json()["hasActiveSubscription"] is True
+    assert response.json()["status"] == "active"
+
+
 @patch("app.api.v1.billing_endpoints.billing_service.process_webhook_event")
 @patch("app.api.v1.billing_endpoints.billing_service.construct_webhook_event")
 def test_webhook_duplicate_event(mock_construct, mock_process):
