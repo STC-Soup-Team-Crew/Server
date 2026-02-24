@@ -236,7 +236,7 @@ def get_subscription_status(clerk_user_id: str) -> Dict[str, Any]:
             customer=customer_id,
             status="all",
             limit=100,
-            expand=["data.items.data.price.product"],
+            expand=["data.items.data.price"],
         )
     except Exception as exc:
         raise _error(
