@@ -2,14 +2,14 @@ import base64
 import json
 import re
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile, Query
 from openai import AsyncOpenAI
 
-from typing import List
+from typing import List, Optional
 
 from app.core.config import settings
 import app.db.session as supabase_db
-from app.schemas.schemas import ItemBase, FavoriteRecipe
+from app.schemas.schemas import ItemBase, FavoriteRecipe, FridgeListingCreate, ClaimRequest
 
 router = APIRouter()
 
@@ -62,6 +62,66 @@ async def search_recipes(ingredients: str):
     """Search recipes by ingredients. Pass a comma-separated list, e.g. ?ingredients=tomato,cheese"""
     ingredient_list = [i.strip() for i in ingredients.split(",") if i.strip()]
     return supabase_db.search_recipes_by_ingredients(ingredient_list)
+
+# ---------- Fridge Share (leftover sharing) ----------
+
+@router.post("/fridge-listings")
+async def create_fridge_listing(listing: FridgeListingCreate):
+    """Post a new leftover-item listing to the community feed."""
+    try:
+        created = supabase_db.create_fridge_listing(listing)
+        return created
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to create listing: {exc}")
+
+
+@router.get("/fridge-listings")
+async def get_fridge_listings(status: Optional[str] = Query("available")):
+    """Get all fridge listings, optionally filtered by status (default: available)."""
+    return supabase_db.get_fridge_listings(status)
+
+
+@router.get("/fridge-listings/mine")
+async def get_my_listings(user_id: str = Query(...)):
+    """Get all listings posted by the authenticated user."""
+    return supabase_db.get_user_fridge_listings(user_id)
+
+
+@router.get("/fridge-listings/{listing_id}")
+async def get_fridge_listing(listing_id: str):
+    """Get a single listing by ID."""
+    listing = supabase_db.get_fridge_listing_by_id(listing_id)
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return listing
+
+
+@router.patch("/fridge-listings/{listing_id}/claim")
+async def claim_fridge_listing(listing_id: str, body: ClaimRequest):
+    """Claim an available listing. Fails if already claimed."""
+    try:
+        result = supabase_db.claim_fridge_listing(listing_id, body.claimed_by, body.claimed_by_name)
+        if not result:
+            raise HTTPException(status_code=409, detail="Listing is no longer available")
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to claim listing: {exc}")
+
+
+@router.delete("/fridge-listings/{listing_id}")
+async def delete_fridge_listing(listing_id: str, user_id: str = Query(...)):
+    """Soft-delete a listing (owner only)."""
+    try:
+        deleted = supabase_db.delete_fridge_listing(listing_id, user_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Listing not found or not owned by you")
+        return {"detail": "Listing deleted"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to delete listing: {exc}")
 
 # ---------- Image upload → ChatGPT vision ----------
 
