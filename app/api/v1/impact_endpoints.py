@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional, List
 import json
 
-from ..schemas.impact_schemas import (
+from ...schemas.impact_schemas import (
     ImpactCalculationRequest,
     ImpactCalculationResponse,
     WeeklySummaryResponse,
@@ -20,9 +20,9 @@ from ..schemas.impact_schemas import (
     ImpactEventCreate,
     IngredientInput
 )
-from ..services.impact_calculator import impact_calculator
-from ..services.impact_aggregator import impact_aggregator
-from ..services.gamification_service import gamification_service
+from ...services.impact_calculator import impact_calculator
+from ...services.impact_aggregator import impact_aggregator
+from ...services.gamification_service import gamification_service
 
 router = APIRouter(prefix="/impact", tags=["Impact Tracking"])
 
