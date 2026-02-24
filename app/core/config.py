@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     billing_default_amount_cents: int = 199
     billing_default_currency: str = "usd"
     billing_merchant_display_name: str = "MealMaker"
+    billing_subscription_price_id: str = ""
+    billing_subscription_name: str = "Meal Master Pro"
+    billing_plan_key_price_map: str = ""
     billing_return_url: str = ""
     billing_sqlite_path: str = "/tmp/stc_billing.sqlite3"
     clerk_secret_key: str = ""

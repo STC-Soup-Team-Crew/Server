@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
@@ -178,6 +179,125 @@ def get_or_create_customer(clerk_user_id: str) -> str:
     return customer_id
 
 
+def _parse_plan_key_price_map() -> Dict[str, str]:
+    raw_map = settings.billing_plan_key_price_map.strip()
+    if not raw_map:
+        return {}
+    try:
+        parsed = json.loads(raw_map)
+    except Exception as exc:
+        raise _error(
+            500,
+            "BILLING_PLAN_MAP_INVALID",
+            "BILLING_PLAN_KEY_PRICE_MAP must be a valid JSON object.",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise _error(
+            500,
+            "BILLING_PLAN_MAP_INVALID",
+            "BILLING_PLAN_KEY_PRICE_MAP must be a JSON object mapping plan keys to Stripe price IDs.",
+        )
+    map_result: Dict[str, str] = {}
+    for key, value in parsed.items():
+        key_str = str(key).strip()
+        value_str = str(value).strip()
+        if key_str and value_str:
+            map_result[key_str] = value_str
+    return map_result
+
+
+def _find_matching_recurring_price_id(target_name: str) -> Optional[str]:
+    normalized_target = target_name.strip().lower()
+    if not normalized_target:
+        return None
+    prices = stripe.Price.list(active=True, type="recurring", limit=100, expand=["data.product"])
+
+    for price in _obj_get(prices, "data", []) or []:
+        nickname = (_obj_get(price, "nickname") or "").strip()
+        product = _obj_get(price, "product", {})
+        product_name = ""
+        if isinstance(product, dict):
+            product_name = (product.get("name") or "").strip()
+
+        match_values = [nickname.lower(), product_name.lower()]
+        if normalized_target in match_values:
+            return _obj_get(price, "id")
+
+    for price in _obj_get(prices, "data", []) or []:
+        nickname = (_obj_get(price, "nickname") or "").strip().lower()
+        product = _obj_get(price, "product", {})
+        product_name = ""
+        if isinstance(product, dict):
+            product_name = (product.get("name") or "").strip().lower()
+        if normalized_target in nickname or normalized_target in product_name:
+            return _obj_get(price, "id")
+    return None
+
+
+def _resolve_subscription_price_id(payload: Dict[str, Any]) -> str:
+    configured_price_id = settings.billing_subscription_price_id.strip()
+    if configured_price_id:
+        return configured_price_id
+
+    requested_plan_key = str(payload.get("planKey") or payload.get("plan_key") or "").strip()
+    if requested_plan_key:
+        plan_price_map = _parse_plan_key_price_map()
+        mapped_price_id = plan_price_map.get(requested_plan_key)
+        if mapped_price_id:
+            return mapped_price_id
+
+        if requested_plan_key.startswith("price_"):
+            return requested_plan_key
+
+        try:
+            lookup_prices = stripe.Price.list(
+                active=True,
+                type="recurring",
+                lookup_keys=[requested_plan_key],
+                limit=1,
+            )
+            lookup_data = _obj_get(lookup_prices, "data", []) or []
+            if lookup_data:
+                lookup_price_id = _obj_get(lookup_data[0], "id")
+                if lookup_price_id:
+                    return lookup_price_id
+        except Exception:
+            logger.warning("Stripe lookup_key price search failed", exc_info=True)
+
+        try:
+            matching_from_plan_key = _find_matching_recurring_price_id(requested_plan_key)
+            if matching_from_plan_key:
+                return matching_from_plan_key
+        except Exception as exc:
+            raise _error(
+                502,
+                "BILLING_PRICE_LOOKUP_FAILED",
+                f"Unable to query Stripe prices for Clerk plan '{requested_plan_key}': {exc}",
+            ) from exc
+
+    target_name = settings.billing_subscription_name.strip()
+    if target_name:
+        try:
+            matching_from_name = _find_matching_recurring_price_id(target_name)
+            if matching_from_name:
+                return matching_from_name
+        except Exception as exc:
+            raise _error(
+                502,
+                "BILLING_PRICE_LOOKUP_FAILED",
+                f"Unable to query Stripe prices for '{target_name}': {exc}",
+            ) from exc
+
+    raise _error(
+        500,
+        "BILLING_SUBSCRIPTION_PRICE_NOT_FOUND",
+        (
+            "No Stripe recurring price found for the provided plan key. "
+            "Set BILLING_SUBSCRIPTION_PRICE_ID or BILLING_PLAN_KEY_PRICE_MAP."
+        ),
+    )
+
+
 def create_mobile_payment_sheet(clerk_user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     _require_stripe()
     customer_id = get_or_create_customer(clerk_user_id)
@@ -191,16 +311,27 @@ def create_mobile_payment_sheet(clerk_user_id: str, payload: Dict[str, Any]) -> 
         customer=customer_id,
         stripe_version=settings.stripe_api_version,
     )
-    payment_intent = stripe.PaymentIntent.create(
-        amount=settings.billing_default_amount_cents,
-        currency=settings.billing_default_currency,
+
+    subscription_price_id = _resolve_subscription_price_id(payload)
+    subscription = stripe.Subscription.create(
         customer=customer_id,
-        automatic_payment_methods={"enabled": True},
-        setup_future_usage="off_session",
+        items=[{"price": subscription_price_id}],
+        payment_behavior="default_incomplete",
+        payment_settings={"save_default_payment_method": "on_subscription"},
+        expand=["latest_invoice.payment_intent", "items.data.price.product"],
         metadata=metadata,
     )
+    payment_intent = _obj_get(_obj_get(subscription, "latest_invoice", {}), "payment_intent", {})
+    client_secret = _obj_get(payment_intent, "client_secret")
+    if not client_secret:
+        raise _error(
+            502,
+            "BILLING_SUBSCRIPTION_PAYMENT_INTENT_MISSING",
+            "Stripe subscription did not return a payment intent client secret.",
+        )
+
     response: Dict[str, Any] = {
-        "paymentIntentClientSecret": _obj_get(payment_intent, "client_secret"),
+        "paymentIntentClientSecret": client_secret,
         "customerId": customer_id,
         "customerEphemeralKeySecret": _obj_get(ephemeral_key, "secret"),
     }

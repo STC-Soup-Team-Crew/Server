@@ -167,4 +167,17 @@ CLERK_JWT_ISSUER=https://your-clerk-domain
 CLERK_JWT_AUDIENCE=your-audience
 BILLING_RETURN_URL=mealmaker://billing-return
 BILLING_MERCHANT_DISPLAY_NAME=MealMaker
+# Preferred: exact Stripe recurring Price ID for Meal Master Pro
+BILLING_SUBSCRIPTION_PRICE_ID=price_...
+# Optional: map Clerk plan IDs to Stripe recurring Price IDs (JSON object)
+# Example for Clerk plan id "pro":
+BILLING_PLAN_KEY_PRICE_MAP={"pro":"price_..."}
+# Optional fallback lookup name (used when BILLING_SUBSCRIPTION_PRICE_ID is not set)
+BILLING_SUBSCRIPTION_NAME=Meal Master Pro
 ```
+
+`planKey` from the frontend is resolved in this order:
+1) `BILLING_SUBSCRIPTION_PRICE_ID`
+2) `BILLING_PLAN_KEY_PRICE_MAP[planKey]`
+3) Stripe Price `lookup_key == planKey`
+4) name/nickname match using `BILLING_SUBSCRIPTION_NAME`
